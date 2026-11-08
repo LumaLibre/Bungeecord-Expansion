@@ -14,11 +14,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -34,7 +34,7 @@ public final class BungeeExpansion extends PlaceholderExpansion implements Plugi
     private static final Splitter SPLITTER = Splitter.on(",").trimResults();
 
 
-    private final Map<String, Integer>        counts = new HashMap<>();
+    private final Map<String, Integer> counts = new HashMap<>();
     private final AtomicReference<BukkitTask> cached = new AtomicReference<>();
 
     private static Field inputField;
@@ -71,19 +71,21 @@ public final class BungeeExpansion extends PlaceholderExpansion implements Plugi
 
     @Override
     public String onRequest(final OfflinePlayer player, String identifier) {
-        final int value;
+        String value;
 
-        switch (identifier.toLowerCase()) {
+        switch (identifier.toLowerCase(Locale.ROOT)) {
+            case "list_servers":
+                value = String.join(",", counts.keySet());
+                break;
             case "all":
             case "total":
-                value = counts.values().stream().mapToInt(Integer::intValue).sum();
+                value = String.valueOf(counts.values().stream().mapToInt(Integer::intValue).sum());
                 break;
             default:
-                value = counts.getOrDefault(identifier.toLowerCase(), 0);
+                value = String.valueOf(counts.getOrDefault(identifier.toLowerCase(Locale.ROOT), 0));
                 break;
         }
-
-        return String.valueOf(value);
+        return value;
     }
 
     @Override
@@ -92,8 +94,7 @@ public final class BungeeExpansion extends PlaceholderExpansion implements Plugi
 
             if (counts.isEmpty()) {
                 sendServersChannelMessage();
-            }
-            else {
+            } else {
                 counts.keySet().forEach(this::sendPlayersChannelMessage);
             }
 
@@ -135,16 +136,16 @@ public final class BungeeExpansion extends PlaceholderExpansion implements Plugi
         try {
             DataInputStream stream = (DataInputStream) inputField.get(in);
             switch (in.readUTF()) {
-                    case PLAYERS_CHANNEL:
-                        if (stream.available() == 0) return; // how ?
-                        final String server = in.readUTF();
-                        if (stream.available() == 0) { // how ? x2
-                            getPlaceholderAPI().getLogger().log(Level.SEVERE, String.format("[%s] Could not get the player count from server %s.", getName(), server));
-                            counts.put(server.toLowerCase(), 0);
-                        } else counts.put(server.toLowerCase(), in.readInt());
+                case PLAYERS_CHANNEL:
+                    if (stream.available() == 0) return; // how ?
+                    final String server = in.readUTF();
+                    if (stream.available() == 0) { // how ? x2
+                        getPlaceholderAPI().getLogger().log(Level.SEVERE, String.format("[%s] Could not get the player count from server %s.", getName(), server));
+                        counts.put(server.toLowerCase(Locale.ROOT), 0);
+                    } else counts.put(server.toLowerCase(Locale.ROOT), in.readInt());
                     break;
                 case SERVERS_CHANNEL:
-                    SPLITTER.split(in.readUTF()).forEach(serverName -> counts.putIfAbsent(serverName.toLowerCase(), 0));
+                    SPLITTER.split(in.readUTF()).forEach(serverName -> counts.putIfAbsent(serverName.toLowerCase(Locale.ROOT), 0));
                     break;
             }
         } catch (Exception e) {
@@ -154,7 +155,8 @@ public final class BungeeExpansion extends PlaceholderExpansion implements Plugi
 
 
     private void sendServersChannelMessage() {
-        sendMessage(SERVERS_CHANNEL, out -> { });
+        sendMessage(SERVERS_CHANNEL, out -> {
+        });
     }
 
     private void sendPlayersChannelMessage(final String serverName) {
